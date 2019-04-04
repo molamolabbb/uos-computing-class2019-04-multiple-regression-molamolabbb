@@ -1,0 +1,445 @@
+#+TITLE:
+# +AUTHOR:    Ian J. Watson
+# +EMAIL:     ian.james.watson@cern.ch
+# +DATE:      University of Seoul Graduate Course
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+#+OPTIONS: ^:{} toc:nil H:2
+#+BEAMER_FRAME_LEVEL: 2
+#+LATEX_HEADER: \usepackage{tikz}  \usetikzlibrary{hobby}
+#+LATEX_HEADER: \usepackage{amsmath} \usepackage{graphicx}
+  
+# Theme Replacements
+#+BEAMER_THEME: Madrid
+#+LATEX_HEADER: \usepackage{mathpazo} \usepackage{bm}
+# +LATEX_HEADER: \definecolor{IanColor}{rgb}{0.4, 0, 0.6}
+#+BEAMER_HEADER: \definecolor{IanColor}{rgb}{0.0, 0.4, 0.6}
+#+BEAMER_HEADER: \usecolortheme[named=IanColor]{structure} % Set a nicer base color
+#+BEAMER_HEADER: \newcommand*{\LargerCdot}{\raisebox{-0.7ex}{\scalebox{2.5}{$\cdot$}}} 
+# +LATEX_HEADER: \setbeamertemplate{items}{$\LargerCdot$} % or \bullet, replaces ugly png
+#+BEAMDER_HEADER: \setbeamertemplate{items}{$\bullet$} % or \bullet, replaces ugly png
+#+BEAMER_HEADER: \colorlet{DarkIanColor}{IanColor!80!black} \setbeamercolor{alerted text}{fg=DarkIanColor} \setbeamerfont{alerted text}{series=\bfseries}
+#+LATEX_HEADER: \usepackage{epsdice}
+
+  
+#+LATEX: \setbeamertemplate{navigation symbols}{} % Turn off navigation
+  
+#+LATEX: \newcommand{\backupbegin}{\newcounter{framenumberappendix} \setcounter{framenumberappendix}{\value{framenumber}}}
+#+LATEX: \newcommand{\backupend}{\addtocounter{framenumberappendix}{-\value{framenumber}} \addtocounter{framenumber}{\value{framenumberappendix}}}
+  
+#+LATEX: \institute[UoS]{University of Seoul}
+#+LATEX: \author{Ian J. Watson}
+#+LATEX: \title[Regression]{Introduction to Machine Learning (by Implementation)} \subtitle{Lecture 4: Multiple Regression}
+#+LATEX: \date[ML (2019)]{University of Seoul Graduate Course 2019}
+#+LATEX: \titlegraphic{\includegraphics[height=.14\textheight]{../../../course/2018-stats-for-pp/KRF_logo_PNG.png} \hspace{15mm} \includegraphics[height=.2\textheight]{../../2017-stats-for-pp/logo/UOS_emblem.png}}
+#+LATEX: \maketitle
+
+* Introduction
+** Regression
+
+- Regression is one of the major tasks in machine learning
+- Idea: given some pieces of data, can you predict some dependent variables
+- We have some variables \(\mathbf{x}\) that represent our
+  /measurement/, and we want to predict some \(y\) based on that
+- In parametric regression, we build a /model/, a function
+  \(f(\mathbf{x}; \bm{\theta})\) which depends on the measurement
+  variables and a set of /parameters/ \(\bm{\theta}\), which will
+  /fit/ or /train/ to some known data sample
+  - I.e. we have some known sample of \(\mathbf{x}_i \to y_i\) which
+    we will use to fix the parameters of the model, e.g. intercept and slope of a line
+  - This is a /supervised learning/ problem
+- Example, we may have a sample \(x_i \to y_i\), which we think can be
+  modeled by a Gaussian, \(f(x; \mu, \sigma) = \frac{1}{\sqrt{2\pi\sigma^2}} e^{-\frac{(x-\mu)^2}{2\sigma}}\)
+  - The best estimate for \mu will be the sample mean
+  - The best estimate for \(\sigma^2\) will be the sample variance
+  - The above can be easily derived (we did in our stats class last semester)
+
+** Multiple regression
+
+***                                                                   :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: .3
+    :END:
+
+#+attr_latex: :width \textwidth
+[[file:multiple_regression_representation_hyperplane.jpg]]
+
+***                                                                   :BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: .7
+    :END:
+
+- Last week, we looked at simple linear regression: \(y = \beta x + \alpha\)
+  - We solved for \alpha and \beta exactly
+- Today, we will extend to several potential explanatory variables:
+  multiple regression
+
+***                                                         :B_ignoreheading:
+    :PROPERTIES:
+    :BEAMER_env: ignoreheading
+    :END:
+
+- If we have several variables, we can label them \(x^{(j)}\), then
+  extend the linear regression to include each variable
+  - \(y_i = \beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i + \epsilon_i\)
+  - Our model function is linear: \(f(\vec{x}_i|\vec\beta) = \beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i\)
+  - As before, \(\epsilon_i\) is our residual, the variance not captured in the model
+- Multiple /linear/ regression finds the best hyperplane which fits the data
+- We can again try to minimize the loss, \(L = \sum_i (f(\vec{x}_i|\vec\beta) - y_i)^2 = \sum_i \epsilon_i^2\)
+  - This week, we won't solve exactly but use our gradient descent code
+# - We will do this slightly differently by implementing \\
+#   /stochastic gradient descent/
+
+** Stochastic Gradient Descent
+
+- When we did gradient descent, we assumed that we used the full
+  function on each update
+- Recall, our loss function is \(L = \sum_{i=1}^n (f(\vec{x}_i;\vec\theta) - y_i)^2\)
+- This requires evaluating our regression function \(f\) at each point
+  in the dataset every time we update the parameters
+- For large datasets and/or complex functions \(f\), this can be
+  very expensive, and so very slow to converge
+- Instead, our loss functions can be separated into /mini-batches/,
+  and the updates done per batch:
+  - Take a subset of the data \(U\), \\
+    we will take \(U = \{\vec{x}_i\}\), i.e. a single data point, for simplicity
+  - Evaluate and do the gradient descent parameter update on the loss
+    function of the subset \(L = \sum_{x_i \in U} (f(\vec{x}_i;\vec\theta) -
+    y_i)^2\)
+  - Repeat until convergence
+  - The stopping condition is subtle, since we only take part of the
+    data, we can circle around for a long time, so we will shrink the learning rate
+  - *Carefully read the algorithm description at the back*
+- This general procedure is called /stochastic gradient descent/
+
+  # - We will shrink the learning rate as we go, to try to avoid
+  #   circling, and stop if there's no improvement after a certain
+  #   number of iterations, see detailed algorithm description later
+  # - After one run through the whole dataset, if there is no
+  #   improvement, shrink the learning rate by 90%. If theres still
+  #   no improvement after 100 such iterations, return the last good
+  #   parameter
+
+** SGD Illustration
+
+\centering
+#+ATTR_LATEX: :width .55\textwidth
+[[file:sgd.png]]
+
+- If we did normal gradient descent, we calculate the loss and
+  gradient over the entire dataset (the whole "batch")
+  - This can be very expensive, and very slow (especially the way we
+    wrote it, with several test \eta)
+- Instead, we can split up into mini-batches (or individual data
+  samples, shown as SGD in the diagram), and take many small steps
+  - Since each data point can have different prefered directions (due
+    to the overall residuals), it will be less stable
+- We will run over the whole dataset, then check convergence
+  - We will require 100 such runs through the data with no
+    improvement, decreasing out learning parameter each iteration
+
+** SGD Extensions
+
+- Stochastic gradient descent should converge to the same point, and
+  since it requires less evaluations per update, should converge faster
+- But, since you only use part of the data each time, it can also
+  wander more around the parameter space
+- There are several extensions to SGD in common use to control updates
+  and improve convergence, the main ones being
+  - Momentum: keep track of the gradients and average over them
+    - As batches go through, the average should remove fast varying
+      components from residuals, and increase in the direction to the
+      true minimum
+    - \(\Delta w_{i+1} := \alpha \Delta w_i - \eta \nabla f\), \(w_{i+1} = w_i + \Delta w_{i+1}\)
+    - \eta is the learning rate as before, \alpha controls how fast
+      the momentum builds up
+  - Adaptive gradients: generally, the learning rates for the
+    parameters are set independently and updated as the gradient
+    descent progresses
+    - E.g. Adagrad keeps track of the size of the updates, and dampens
+      fast-varying components: \(g_{t+1} = g_t + \nabla L, w_{t+1} = w_t - \alpha \nabla L / \sqrt{g_{t+1}}\)
+    - RMSProp works similarly, but dampens with an exponential decay
+      parameter \gamma: \(g_{t+1} = \gamma g_t + (1 - \gamma) \nabla L, w_{t+1} = w_t - \alpha \nabla L / \sqrt{g_{t+1}}\)
+
+** \(R^2\) in multiple regression
+
+- The coefficient of determination naturally extends to multiple regression
+- \(R^2 = 1 - SSR^2/SST^2\), \\
+  \(SSR^2 = \sum_i (f(\vec{x}_i) - y_i)^2\), \(SST^2 = \sum_i (y_i - \langle y \rangle)^2\)
+  - Describes what fraction of the variance in \(y\) is explained by the model
+- We see though, that every variable you add is guaranteed to increase \(R^2\)
+  - \(y_i = \beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i + \epsilon_i\)
+  - If some \(\beta_j\) doesn't help reduce the residual, can set to 0
+    and get the same \( \sum_i \epsilon_i^2\) as without it
+- Need to be carefully interpreting the results
+- A common procedure to understand the uncertainty when dealing with
+  unknown datasets is the /bootstrap/, we may go through this later
+
+# - How can we tell how good our regression really is?
+# - Which coefficients are important, which ones are not?
+#   - For example, in our full boston dataset, how could we have an idea
+#     of which variables are important in the full regression?
+
+** Bootstrap Ensemble                                              :noexport:
+
+- One common statistical technique uses resampling of the data to
+  produce an estimate of the uncertainty of parameters
+  - Taking estimates of properties from the data itself, the
+    "empirical distribution function", it called a "bootstrap" method,
+  - From the English phrase "lifting yourself up by your bootstraps"
+- The idea is we produce a statistical /ensemble/ of datasets by
+  taking sets of data by randomly choosing \(N\) points from the data
+  with replacement
+- So, if we have a dataset \(\{\vec{x}_1, \vec{x}_2\}\) of two points,
+  the bootstrap datasets are:
+  - \(\{\vec{x}_1, \vec{x}_1\}\) which is picked 25% of the time
+  - \(\{\vec{x}_1, \vec{x}_2\}\) which is picked 50% of the time
+  - \(\{\vec{x}_2, \vec{x}_2\}\) which is picked 25% of the time
+- For larger samples, it becomes increasingly unlikely to pick the
+  original dataset, most samples in the ensemble will contain repeats
+- We will use this ensemble to estimate properties of statistics of
+  the original dataset
+
+** Bootstrap Properties                                            :noexport:
+
+- Take the bootstrap ensemble samples, and use them to find properties
+  of estimators of the dataset
+  - E.g. Find the mean \(\langle x \rangle\) for each dataset, then an
+    estimate for the variance of the mean is the variance of the
+    ensemble means
+    - We have found an estimate for the variance of the estimate of the mean
+    - Or, it gives us an idea of the range of values allowed by the
+      dataset for the mean
+  - Or, we could run the multiple regression on the bootstrap samples
+    and get estimates for the variance of our regression parameters
+- Bootstrapping is common when the parametric form of the underlying
+  distribution is unknown or in question
+  - For our Boston dataset, we don't really know if multiple
+    regression is the best way to model the data (won't include
+    correlation behind variables for instance), so we bootstrap the
+    uncertainties
+
+** Bootstrap Example                                               :noexport:
+
+- Lets think about estimating the variance of the median of two
+  different samples:
+  - A dataset of 101 samples picked from a uniform distribution
+    between 99.5 and 100.5, \(U(99.5, 100.5)\)
+    - The median will be close to 100, the bootstrap variance of the
+      median will be close to 0
+  - A dataset of 101 samples, 1 picked from \(U(99.5, 100.5)\), 50
+    from \(U(-0.5, 0.5)\), 50 from \(U(199.5, 200.5)\)
+    - The median here is close to 100, since the \(U(99.5, 100.5)\)
+      is chosen to be in the middle
+    - If we bootstrap this dataset, though, we will often
+      over-represent the 200 side, or the 0 side
+    - Thus, the variance of the median from the bootstraps will be
+      \(\approx 100^2\)
+    - If we really got a dataset that looked like this, we couldn't be
+      sure of the stability of the underlying distribution to say what
+      our expected median is, without some theory as to why it
+      distributes like this
+
+** Bootstrap and p-values                                          :noexport:
+
+- We can build test hypotheses using our error estimates
+- For example, we want to know the p-value for our \(\beta\)s to be 0
+  - Under the assumption that \beta is 0, whats the probability to
+    observe a value as extreme or more extreme as what we see
+- Construct the test statistic \(t_j = \hat\beta_j / \hat\sigma_j\)
+  - \(\hat\beta_j\) is our estimate for \(\beta_j\) and
+    \(\hat\sigma_j\) our bootstrap estimate for its variance
+- Under the hypothesis \(\beta_j = 0\), the test statistic should
+  follow a Student's \(t\)-distribution with \(n-k\) degrees of freedom
+  - Under several assumptions about the data, such as the observations
+    are independent and identical, not heavy-tailed, etc.
+  - \(n\) is the size of the original sample, \(k\) the number of
+    parameters we use
+- For large \(n-k\), we can approximate the Student's t with a Normal
+- The \(p\)-value is then
+  - \(p = 2 \cdot (1 - normal\_cdf(\hat\beta / \hat\sigma_j))\) if x > 0
+  - \(p = 2 \cdot normal\_cdf(\hat\beta / \hat\sigma_j)\) if x < 0
+  - \(normal\_cdf(x)\) is the integral from -\infty to \(x\) of a
+    normal distribution centered at 0, width 1
+  - This is the probability to see a value as far or further from zero
+# - If \(p\) is small (unlikely to see a value), we can be sure the
+#   \(\beta_j\) has a real slope, if large (likely to see such a value),
+#   the value is compatible with 0
+
+** Overfitting                                                     :noexport:
+
+** Summary for Today
+
+- Multiple linear regression extends simple linear regression to
+  multiple independent variables \(\vec{x}\) to explain a single
+  dependent variable \(y\) by the linear function
+  \(f(\vec{x}|\vec\beta) = \beta_0 + \beta_1 x^{(1)} + \ldots \beta_k x^{(k)}\)
+  - In the code, you may find it simpler to introduce a dummy variable
+    \(x^{(0)}\), which is always 1, then you have simply \(f(\vec{x}|\vec\beta) = \vec\beta \cdot \vec{x}\)
+  - I will accept either version
+- We will use stochastic gradient descent (SGD) to find these \(\vec\beta\)
+  - In stochastic gradient descent, instead of trying to update the
+    parameters from the full loss function, \(L = \sum_i
+    (f(\vec{x}_i|\vec\beta) - y_i)^2\), we use a subset of the data,
+    or a single data point for each parameter update
+  - By updating on /mini-batches/ the parameters should converge
+    faster, with the caveat that different data points could pull the
+    model in different directions
+  - SGD is the heart of deep learning, every deep model you see has
+    used an extension of SGD to find the parameter values
+
+# - To find uncertainties or other properties of statistics of
+#   un-parameterized datasets, you can use the bootstrap method
+#   - Create an ensemble of samples by resampling the data allowing
+#     replacements, and find estimates of properties from the ensemble
+#   - We will find uncertainties of \beta with bootstrapping, then find
+#     p-values for the null-hypothesis that \beta=0
+
+* Exercises
+
+** Exercises
+
+# - Take your random code, implement =random_choice(x)= which returns a
+#   random element from the list =x=
+#   - Write a test in =test_all.py=
+
+- Implement stochastic gradient descent as a function
+  =stochastic_minimize(f, df, x, y, theta0, alpha)=
+  - Finds the parameters \theta giving the minimum
+  - The alpha parameter will reduce as we continue. (see next page)
+- Run SGD to find alpha, beta (from last week) of the boston dataset for individual variables
+  - Do you find the same values?
+- Run SGD to find the best fit values for the full multiple regression of the boston dataset
+  - You will need a =loss= function and \(\nabla\)loss, =dloss=
+- =loss(x_i, y_i, beta)= returns the loss for a single datapoint
+  \((\beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i - y_i)^2\)
+- =dloss(x_i, y_i, beta)= returns the gradient of the loss \((2 \cdot
+  (\beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i - y_i),
+  2x^{(1)}_i \cdot (\beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k
+  x^{(k)}_i - y_i), \ldots, 2x^{(k)}_i \cdot (\beta_0 + \beta_1
+  x^{(1)}_i + \ldots + \beta_k x^{(k)}_i - y_i))\)
+
+# - Implement =boostrap_sample(data)= using your =random_choice= function
+# - Implement =bootstrap_statistic(data, stat_fn, num_samples)= using =bootstrap_sample=
+# - Implement =p_value(beta, error)= which returns the p-value from
+#   standard normal distribution for parameter =beta= with given =error=
+
+** Exercises: Detailed Algorithms                                  :noexport:
+
+- =random_choice(x)=
+  - Generate an integer =i= in =[0, len(x)-1]= inclusive, and return
+    the element =x[i]=. Use randnr from your random library!
+- =in_random_order(x)= returns a new list of the elements of =x= in a
+  random order. This is more subtle than you think! I wrote a version
+  in the python file for today, you should just look over it
+- =bootstrap_sample(data)=
+  - Run =random_choice(data)= =len(data)= times, saving the elements
+    in a list and then return the list
+- =bootstrap_statistic(data, stat_fn, num_samples)=
+  - Run =sample = bootstrap_sample(data)= =num_samples= times, each
+    time running the =stat_fn(sample)=.
+  - Save the value returned by =stat_fn= in a list, and then return the list
+- =normal_cdf(x)=
+  - returns \(\frac{1}{2}\left (1 + erf  (\frac{x}{\sqrt{2}}) \right )\), use =math.erf= for \(erf\)
+
+** Exercises: Detailed Alogrithms                                  :noexport:
+
+- =loss(x, y, beta)=
+  - \(\sum_i (\beta_0 + \beta_1 x^(1)_i + \ldots + \beta_k x^{(k)}_i - y_i)^2\)
+  - \beta should be a list with 1 more element than the number of variables in each x
+- =dloss(x, y, beta)=
+  - Returns list of \(\sum_i 2 x_i^{(k)} (\beta_0 + \beta_1 x^{(1)}_i + \ldots + \beta_k x^{(k)}_i - y_i) \) for each \(k\) (taking \(x^{(0)}_i\) as 1)
+- =p_value(value, error)= should calculate the p value for the null
+  hypothesis per the equation on pg 8
+- =bootstrap_betas(data, target, beta0, num_samples)= should run
+  =minimize= (next page) on the bootstrap samples, with initial =beta0=
+  =bootstrap_statistic= but might find it easier to rewrite it to get
+  each bootstrap sample, then run the minimum, then collect the betas
+
+** Exercises: Detailed Algorithms                                  :noexport:
+
+- With these functions defined, you can run minimization with your
+  =minimize= function from gradient descent week as:
+  - \scriptsize =minimize(lambda b: loss(x, y, b), lambda b: dloss(x, y, b), beta0, [1e-4, 1e-5], 0.05)=
+  - \small Where =x=, =y= are the dataset you are minimizing, and =beta0= is an
+    initial guess for the parameters
+    - =x= should be a list of data points, and each data point is a
+      list, beta0 should have one more parameter than the length of
+      each data point list (for the intercept parameter), =y= is the
+      target output, should be the same length as =x=
+  - Use =step_sizes = [1e-4, 1e-5]=, =tol = 0.05=, starting \beta near 0
+    - The gradients build up quickly, so need to adjust hyperparameters
+    - Choose a starting point near the values from the single variable fit
+  - Run =bootstrap_betas= then find the error, and pass through
+    =p-value= to get the probability the underlying parameter is zero
+    - Need to find the mean and standard deviation of each beta from
+      the bootstraps
+  - write the parameters in a file =param.txt=, one parameter per line
+    along with the starting value you used, the parameter error, and
+    the p-value for null-hypothesis \(\beta_k=0\), comma-separated
+
+** Exercises: Detailed Algorithm
+
+\vspace{-2.5mm}
+- =stochastic_minimize(f, df, x, y, theta0, alpha0=0.001, iterations=50)=
+  - =f=, \(f = f(\vec{x}, y | \theta)\) will be the loss function for
+    a single datapoint
+    - So, \(f(\vec{x}, y | \vec{\beta}) = (\beta_0 + \beta_1 x_1 +
+      \beta_2 x_2 + \ldots + \beta_k x_k - y)^2\) for today
+  - =df= is the gradient of f w.r.t. the parameters, \(2 x_i f(x,
+    y|\beta)\) for multiple regression
+- Set =min_theta= to None, =min_value= to =float('inf')=,
+  =alpha= to =alpha0=, =theta= to =theta0= and =iterations_without_improvement= to 0
+- =while iterations_without_improvement < iterations:=
+  - calculate =value=, the full loss function \(\sum_i f(x_i, y)^2\)
+  - if =value= is less than =min_value=, reset
+      =iterations_without_improvement= to 0, =alpha= to =alpha0= and
+      set the new values of =min_value= to =value= and =min_theta= to
+      =theta=
+    - otherwise, add 1 to =iterations_without_improvement= and set
+        =alpha= to =0.9*alpha=
+  - =for x_i, y_i in in_random_order(data):=
+    - calculate the gradient =gradient_i= or \(\nabla f_i\) with =df=
+    - set =theta= to \(\vec\theta - alpha \cdot \nabla f_i\) (\theta
+        is a list, so you'll have to do component-wise subtraction!)
+  - Return =min_theta=
+
+** Tests
+
+- I will test your =stochastic_minimize= against the boston dataset
+  - The way to call =stochastic_minimize= is shown in =multiple.py=
+  - Write your parameters in a file =results.txt=, one per line,
+    starting with \(\beta_0\), ending with \(beta_13\)
+- Write some tests yourself! Make of some test data and a model with
+  known minimum, and check you can find it
+- E.g. try =x = [0]=, =y = [0]=, =f(x,y,theta) = t[0]**2=
+  - The x, y are ignored by the model, so it should just find the
+    minimum of =t[0]**2=
+  - Example in =test_multiple.py=, don't rely on this alone though!!!
+- You should find that the convergence is much, much better
+  - We effectively have an adaptive gradient parameter in our \alpha,
+    c.f. our \eta list from gradient descent
+- In many dimensions though, its easy to get into a false minima. Take
+  starting parameters nearby the parameters from the individual
+  fits. Play around with the parameters, what gives the best fit?
+  - Bonus points to whoever finds the parameters with the smallest loss
+  - Changing the iterations, and the original intercept plays a big part
+  - You'll have to write a =full_loss= function to compare
+- If you make a nice test, put it in =test_multiple.py=
+
+** Example plots of the boston dataset                             :noexport:
+
+#+ATTR_LATEX: :width .49\textwidth
+[[file:b0_lr.png]]
+#+ATTR_LATEX: :width .49\textwidth
+[[file:b5_lr.png]]
+
+- We will look at the "Boston Housing Dataset" taken from census data
+- Gives several variables for a housing tract (block) and the
+  dependent variable (variable to be described/predicted) of the
+  median value of owner-occupied houses
+- Plots for the 0th column (left), and the 5th column (right) of data
+- You should make plots and do a linear regression for all the columns
+
+\tiny
+Harrison and Rubinfeld, Journal Of Environmental Economics And Management 5, 81-102 (1978)
